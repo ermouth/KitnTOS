@@ -193,7 +193,7 @@ app.use(function(req, res, next) {
 
   var path = req.path.split('/')[1];
     console.log('PPPAAAATH: ', path);
-  if (/auth|login|logout|signup|fonts|favicon|img|css|js|doc|pd|new/i.test(path)||path=='i') {
+  if (/auth|login|logout|signup|fonts|favicon|img|css|js|doc|pd|new|all/i.test(path)||path=='i') {
     return next();
   }
   req.session.returnTo = req.path;
