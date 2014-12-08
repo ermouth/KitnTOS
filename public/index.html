@@ -1,0 +1,349 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="utf-8">
+    <title>Kit’n’tos</title>
+
+    <!-- CSS first for correct pixel measuring during start -->
+    <link rel="stylesheet" type="text/css" href="/css/cw.general.css" />
+    <link rel="stylesheet" type="text/css" href="/css/cw.css" />
+
+    <!-- Base libs -->
+    <script src="/js/cw.general.js"></script>
+    <script src="/js/flatiron-director.js"></script>
+
+    <script>
+        $(function(){
+            $.my.modal.parent($("#cw-body"));
+            function _busy(i) {
+                if (!i) $("section").removeClass("kt-busy");
+                else $("section:visible").addClass("kt-busy")
+            }
+            $("#cw-body").my({
+                require: [
+                    {
+                        "this.Tldr": {
+                            url: "http://cdn.cloudwall.me/kitn/Kitntos.Tldr.json",
+                            dataType: "json", cache: false
+                        }
+                        /*"this.New":{
+                            url:"http://cdn.cloudwall.me/kitn/Kitntos.New.json",
+                            dataType:"json"
+                        },
+                        "this.Vendors":{
+                            url:"http://cdn.cloudwall.me/kitn/Kitntos.Vendors.json",
+                            dataType:"json"
+                        }*/
+                    }
+                ],
+                data:{
+                    url:"",
+                    hid:"",
+                    doc:{},
+                    rows:[]
+                },
+                PD:{},
+                init: function ($o, form){
+                    var that = this;
+
+                    //- - - - - - - - - - - - - - -
+
+                    $o.on("collapse.my", function(evt, data){
+                        // Stashes collapsed/expanded stste
+                        // in LS. data is {}
+                        var cl = that.Ls("collapsed");
+                        if (!Object.isObject(cl)) cl={};
+                        $.extend(cl, data);
+                        that.Ls("collapsed", cl);
+                        form.data.doc.fragments =  Object.clone(form.data.doc.fragments, true);
+                        $("#kt-Tldr").my("redraw");
+                    })
+
+                    //- - - - - - - - - - - - - - -
+
+                    $o.on("Save.my", function(evt, data){
+                        if (that.PD.email) {
+                            _busy(true);
+                            $.post(data.url, data.data)
+                            .then(function(res){
+                                _busy(false);
+                                if (res.ok) {
+                                    cw.lib.note(data.ok || "Saved succesfully! Thank you.", "ok");
+                                    that.Ls("unsaved", null);
+                                    if (data.next && window.location.hash!=data.next) {
+                                        window.location.hash = data.next;
+                                    }
+                                }
+                                else {
+                                    console.log(res);
+                                    cw.lib.note("Error, use console for details.","error")
+                                }
+                            })
+                            .fail(function(res){
+                               console.log(res);
+                               cw.lib.note("Error, use console for details.","error");
+                               _busy(false);
+                            });
+                        } else {
+                            //memoize
+                            that.Ls("unsaved", {stamp:Date.now(), data:data, hash:data.next||window.location.hash});
+                            $.my.modal({
+                                manifest:{
+                                    init:[
+                                        '<h3 class="salmon bold fs110">Log in</h3>',
+                                        '<div class="">',
+                                        '<span class="fi-social-github"></span> ',
+                                        '<a href="/auth/github">Github</a>',
+                                        '</div>',
+
+                                        '<div class="">',
+                                        '<span class="fi-social-facebook"></span> ',
+                                        '<a href="/auth/github">Facebook</a>',
+                                        '</div>',
+
+                                        '<div class="">',
+                                        '<span class="fi-social-twitter"></span> ',
+                                        '<a href="/auth/github">Twitter</a>',
+                                        '</div>'
+                                    ],
+                                    ui:{ "b":"b"}
+                                },
+                                width:180,
+                                css:"fs100 lh160 pl50 ml10 blue"
+                            });
+                        }
+
+
+                    });
+
+                    //- - - - - - - - - - - - - - -
+
+                    function _checkUnsaved(){
+                        var un = that.Ls("unsaved");
+                        if (Object.isObject(un)) {
+
+                            if (un.stamp+6e5 > Date.now() && that.PD.email) {
+                                // save
+                                $o.trigger("Save", $.extend(!0,un.data,{next:un.hash}));
+                                that.Ls("unsaved", null);
+                            }
+                            else that.Ls("unsaved", null);
+                        }
+                    }
+
+                    //- - - - - - - - - - - - - - -
+
+                    $.get("/pd",function(d){
+                        if (!d.error) {
+                            that.PD = d;
+                            _checkUnsaved();
+                        }
+                        else {
+                            that.Ls("unsaved", null);
+                        }
+                    })
+
+                    //- - - - - - - - - - - - - - -
+
+                    this.Switch =  this.Switch();
+                    $o.then(function () {
+                        Router({ '/-:hid': function(hid) {
+                                form.data.hid = hid;
+                                that.Switch("Tldr");
+                            },
+                            '/': that.Switch.fill('Landing')
+                        }).init('/');
+                    });
+                },
+                ui:{
+                    "#footer":"dummy"
+                },
+                Landing:{
+                    ui:{
+                        "#docurl":"url",
+                        "#btn-go":{
+                            bind: function(d,v,$o){
+                                if (v!=null) {
+                                    _busy(true);
+                                    $.post( "/doc", {url: d.url})
+                                    .then(function(res){
+                                        console.log(res);
+                                        _busy(false);
+                                        if (res.error == 400 && res.rows && res.rows[0].fragments.length>3) {
+                                            var r = res.rows[0];
+                                            $o.trigger("Save", {
+                                                url:"/new",
+                                                data:{
+                                                    url: d.url,
+                                                    hid: r.hid,
+                                                    name: r.name,
+                                                    tags:[],
+                                                    old:""
+                                                },
+                                                next:"#-"+ r.hid
+                                            });
+                                        }
+                                        if (res.ok) {
+                                            window.location.hash = "#-"+res.rows[0].hid;
+                                        }
+
+                                     })
+                                    .fail(function(res){
+                                        console.log(res)
+                                    });
+                                }
+                            },
+                            watch:"#docurl",
+                            css:{
+                                ":disabled":function(d){return d.url.length<8}
+                            }
+                        }
+                    }
+                },
+                Prev:null,
+                Switch: function() {
+                     var prev = "Landing",
+                         that = this;
+                     return function(section){
+
+                         var $c = $("#cw-body").find("#kt-"+(prev|| "Landing")),
+                             $n = $("#cw-body").find("#kt-"+section),
+                             eq = !!$c.is($n);
+
+                         if (!eq && $c.is(":visible")) $c.slideUp(300);
+
+                         if (section == "Tldr" && $n.data("my"))  {
+                             $n.my("remove");
+                         }
+
+                         $n.css("opacity","0.05").slideDown(eq?0:200, function(){
+                             if (!$n.data("my") ) {
+                                 $n.my($.extend(!0,{Ls:that.Ls},that[section]), that.data);
+                             }
+                             $n.animate({"opacity":"1"},100)
+                             prev = section;
+                         });
+                         prev = section;
+                     }.bind(that).debounce(50);
+                },
+                Ls:function(key0, data){
+
+                    // Local storage manager
+
+                    var x, ls = window.localStorage,
+                            key = "Kitntos."+key0;
+                    if (data) {
+                        return ls.setItem(key, cw.lib.json(data));
+                    }
+                    else if (data===null || data===false) {
+                        return ls.removeItem(key);
+                    }
+                    else {
+                        var x = ls.getItem(key);
+                        if (Object.isString(x)) return $.my.fromjson(x);
+                        else return null;
+                    }
+                }
+            })
+        })
+    </script>
+
+
+</head>
+<body >
+<!-- Sidenotes container -->
+<div id="cw-notes"></div>
+
+<!-- Main frame -->
+<div id="cw-body" style="width:1260px;color:rgba(71,81,95,1)">
+
+    <section id="kt-Landing" style="width:650px; margin:0px 0 0px 300px; padding:70px 0px 50px 0px;">
+        <div class="lh110 dib vat mt30  ml-5" style="font-size:95pt">Kit’n’tos</div>
+        <img src="/i/logo.png" class="w170 fr" />
+
+        <div class="fs150 lh120">
+            TOS, EULAs and other TL;DRs – <br>
+            marked up with kittens.
+        </div>
+
+        <div class="my-row mt70">
+            <input type="text" id="docurl" placeholder="Paste URL of TL;DR here" class="fs150" style="width: 497px;"/>
+            <input type="button" id="btn-go" class="fs150 w120 bw2" value="Go!">
+        </div>
+
+        <div class="mt30 o80 fs130">
+            Or <span class="pseudolink" id="btn-vendors">select a vendor ▾</span>,
+            or scroll over <a href="/all.html">all kittenized stuff</a>.
+        </div>
+
+        <!-- Footer -->
+        <div id="footer" class="fs80 gray mt150 o80">
+            © 2014
+            <a href="https://github.com/koding/global.hackathon/blob/master/Teams/Bismedia/ABOUT.md"
+            target="_blank">Bismedia team</a> for Koding hackathon
+        </div>
+
+    </section>
+
+    <section id="kt-Tldr" style="display: none;position:relative;">
+
+    </section>
+
+    <section id="kt-Vendors" style="display: none">
+
+    </section>
+
+    <section id="kt-New" style="display: none">
+
+    </section>
+
+</div>
+
+
+
+</body>
+<style>
+    input[type=text], input[type=password], input[type=number], input[type=date], input[type=time], select[multiple]
+    { padding: 0.4em 0.5em; }
+
+    .mt70 {margin-top:70px;}
+    .mt80 {margin-top:80px;}
+    .mt90 {margin-top:90px;}
+    .mt120 {margin-top:120px;}
+    .mt150 {margin-top:150px;}
+
+    input:disabled.bw2:hover,
+    input:disabled.bw2 {border: 2px solid #ecf0f3!important;}
+
+    input.bw2 {border-width: 2px!important;}
+
+    #kt-Landing a:hover, #kt-landing .pseudolink:hover {color: #FF4159;}
+    #kt-Landing input[type=text],
+    #kt-Landing input[type=password],
+    #kt-Landing input[type=number],
+    #kt-Landing input[type=date],
+    #kt-Landing input[type=time],
+    #kt-Landing select[multiple]
+    { padding: 0.4em 0.5em; }
+
+    h1,h2,h3,h4 {color: rgba(61,67,75,1)!important;}
+
+   .ui-helper-hidden-accessible {display:none}
+
+    .kt-busy:before {
+        content: " ";
+        position: absolute;
+        z-index: +1996;
+        background-color: rgba(255,255,255,0.5);
+        width: 100%;
+        height: 100%;
+        top: -25px;
+        left: 0;
+        background-image: url(http://cdn.cloudwall.me/0.9/i/loader-bar2.gif);
+        background-repeat: repeat-x;
+        background-position-y: 20px;
+    }
+
+
+</style>
+</html>
