@@ -1,0 +1,36 @@
+{
+	"id": "cw.Kitntos.All",
+	"params": {
+	},
+	"data": {
+	},
+	"init": "function ($o,form){var pi=$.Deferred(),that=this;$o.html(this.HTML);$.post(\"/all\",function(res){if(res.ok){var a=that.Merge(res);that.List=a;pi.resolve();}})\nreturn pi.promise();}",
+	"List": [],
+	"ui": {
+		"#list": {
+			"bind": "this.List",
+			"list": "<div class=\"w200 dib vat mr10 ml10 mb20 tac pt10 mt10 btd\" style=\"min-height:160px;\"></div>",
+			"manifest": {
+				"init": ["<div id=\"domain\" class=\"dib vat fs80\"></div>",
+					"<div class=\"lh120 mb10\">",
+					"<a id=\"title\" href=\"#\" class=\"tdn lh120\"></a><br>",
+					"</div>",
+					"<div class=\"kit-votes-cont\">",
+					"<img src=\"http://carpogoryanin.koding.io/i/all.png\" style=\"width:320px\">",
+					"</div>"],
+				"ui": {
+					"#domain": "function (d){return d.name.split(\":\")[0]}",
+					"#title": "function (d,v,$o){$o.attr(\"href\",\"#-\"+d.hid);var s=d.name.split(\":\").from(1).join(\":\").compact();return s?s:d.name;}",
+					".kit-votes-cont": {
+						"bind": "function (d,v,$o){$o.find(\"img\").css(\"margin-left\",(5-(5-Math.round(d.kitn))*66)+\"px\");}"
+					}
+				}
+			}
+		}
+	},
+	"style": {
+		" .kit-votes-cont": "display:inline-block; vertical-align:top; width:66px;height:48px; overflow:hidden; margin:0 8px 0 0;"
+	},
+	"Merge": "function (res){var i,j,c,s,k,cn=res.count,rs=res.rows,sum=res.sum,oc={},os={},idx={};for(i=0;i<rs.length;i++){idx[rs[i].hid]=i;rs[i].count=0;rs[i].sum=0;rs[i].kitn=3;}\nfor(i=0;i<cn.length;i++){j=cn[i].key;if(idx[j]!=undefined)rs[idx[j]].count=cn[i].value;}\nfor(i=0;i<sum.length;i++){j=sum[i].key;if(idx[j]!=undefined)rs[idx[j]].sum=sum[i].value;}\nfor(i=0;i<rs.length;i++){c=rs[i].count;if(c>0)rs[i].kitn=rs[i].sum/c;}\nreturn rs.sortBy(\"kitn\",!0);}",
+	"HTML": "<div id=\"logo\" class=\"mt40 mb20 tac\">\n\t<span class=\"o50 fs250 ml-2 hoverlink\"><a href=\"#\" class=\"pseudolink\" style=\"border:none!important\">Kit’n’tos</a></span><br>\n\t<span class=\"fs85 gray\">All stuff</span>\n</div>\n<div id=\"list\" class=\"tac\"></div>\n<div id=\"footer\" class=\"fs80 gray mt40 mb40 pt20 o80 btd tac\" style=\"margin-left:130px;margin-right:130px\">\n\t© 2014\n\t<a href=\"https://github.com/koding/global.hackathon/blob/master/Teams/Bismedia/ABOUT.md\"\n\t\t target=\"_blank\">Bismedia team</a> for Koding hackathon\n</div>"
+}

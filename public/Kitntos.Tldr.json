@@ -1,0 +1,128 @@
+{
+	"id": "cw.Kitntos.Tldr",
+	"params": {
+	},
+	"data": {
+		"doc": {
+		}
+	},
+	"ui": {
+		"#flag": {
+			"css": {
+				"bg-salmon": "function (d){return d.doc.kitn<1.5}",
+				"bg-lblue": "function (d){return d.doc.kitn>=1.5&&d.doc.kitn<4.1}",
+				"bg-green": "function (d){return d.doc.kitn>=4.1}"
+			}
+		},
+		"#title": "doc.name",
+		"#url": "function (d){return'<a href=\"'+d.doc.url+'\" target=\"_blank\">'+d.doc.url+'</a>';}",
+		".flag-votes-cont": {
+			"bind": "function (d,v,$o){$o.find(\"img\").css(\"margin-left\",(5-(5-Math.round(d.doc.kitn))*103)+\"px\")}"
+		},
+		".flag-votes-desc": {
+			"bind": "function (d,v,$o){var html=\"\",vt=d.doc.votes,kt=d.doc.kitn;html+=(kt?([\"It’s awful :(\",\"It’s not ok\",\"Average dull doc\",\"Ok, it’s good\",\"It’s awesome!\"])[Math.round(kt)-1]+'<br>':\"\");html+=(vt?vt+\" vote\"+((vt+\"\").last()!=1?\"s\":\"\"):\"No votes so far\");return html;}"
+		},
+		"#fragments": {
+			"delay": 10,
+			"id": "function (e){return[e.id].join(\"|\")}",
+			"hash": "function (e){return[e.id,e.kitn,e.stamp].join(\"|\")}",
+			"bind": "doc.fragments",
+			"manifest": "function (item){var that=this,M={Root:function(){return that},Ls:that.Ls,Collapsed:that.Collapsed};if(item.type==\"div\")return $.extend(!0,M,this.RowDiv);else return $.extend(!0,M,this.RowH);}",
+			"list": "<div></div>"
+		}
+	},
+	"style": {
+		"": "color:rgb(61,67,75);",
+		" .flag-votes-cont": "display:inline-block; vertical-align:top; width:103px;height:76px; overflow:hidden; margin:17px 0 10px 53px;",
+		" .flag-votes-desc": "font-size:90%; line-height:1.2em; text-align:center;",
+		" #fragments": "color:rgb(61,67,75);",
+		" .fragment": "width:1220px; transition: border 0.5s; border:2px solid rgba(255,160,180,0); border-radius:4px;",
+		" .div .fragment.voted:hover, .div .fragment.virgin:hover": "border:2px solid rgba(255,160,180,1);",
+		" .fragment .full .btn-collapse": "display:inline-block; vertical-align:top; width: 130px; padding: 9px 0 9px 0; font-size:80%; line-height:1.2em; opacity:0; cursor:pointer; transition:opacity 0.5s; text-align:center;",
+		" .fragment:hover .full .btn-collapse": "opacity:1;",
+		" .fragment .div": "display:inline-block; vertical-align:top; width: 700px; padding: 7px 0; font-size:87%; line-height:1.5em; margin-right:40px; opacity:0.5;",
+		" .fragment .full .div": "opacity:1;",
+		" .fragment .full .kit": "display:inline-block; vertical-align:top; width:332px; overflow:hidden; margin-top:4px;",
+		" .fragment:hover .full .kit": "opacity:1;",
+		" .fragment .full .kit .btn-vote": "display:inline-block; vertical-align:top; width:66px; height:50px; background-color:white; opacity:0.4; transition:opacity 0.3s; cursor:pointer;",
+		" .fragment .full .kit .btn-vote:hover": "opacity:0;",
+		" .fragment .full .kit-result .kit-votes-cont": "display:inline-block; vertical-align:top; width:66px;height:48px; overflow:hidden; margin:0 8px 0 0;",
+		" .fragment .full .kit-result .kit-votes-desc": "display:inline-block; vertical-align:top; width:220px; overflow:hidden; word-wrap:break-word; font-size:100%; line-height:1.15em; margin-top:10px;",
+		" .fragment .full .kit-vote": "transition: opacity 0.3s; opacity:0;",
+		" div:hover>.fragment .full .kit-vote": "opacity:1;",
+		" .fragment.voted .full .kit-vote": "display:none;",
+		" .fragment.virgin .full .kit-result": "display:none;",
+		" .fragment .brief": "display:none;",
+		" .fragment.collapsed .brief": "display:block;",
+		" .fragment.collapsed .full": "display:none;",
+		" .fragment.voted .full .kit:hover .kit-vote": "display:block;",
+		" .fragment.voted .full .kit:hover .kit-result": "display:none;",
+		" .fragment.hasmodal .full .kit .kit-vote": "display:block;opacity:1;",
+		" .fragment.hasmodal .full .kit .kit-result": "display:none;",
+		" .btn-expand": "cursor:pointer;",
+		" .btn-expand:hover": "color:rgba(255,160,180,1);"
+	},
+	"init": "function ($o,form){var pi=$.Deferred(),that=this;$o.html(['<div class=\"p50 mt50 tac fs120 blue\">','<img src=\"/i/logo.png\" class=\"w80 dib\"><br>','&nbsp;Loading doc<br>','<div class=\"cw-busy w50\"></div>','</div>'].join(\"\"));$o.then(function(){$o.find(\"#flag\").fadeIn(500);});$o.on(\"click.my\",\".full .div\",function(){var $p=$(this),t=$p.data(\"html\"),cl={};if(t)$p.html(t);cl[$p.data(\"my\").data.id]=false;$o.trigger(\"collapse\",cl);});this.Go=form.data.hid||form.data.url||this.Go;var cl=that.Ls(\"collapsed\")||{};this.Collapsed=function(fid){return cl[fid];}\nvar req={},f;if(this.Go.length==8)req.hid=this.Go;else req.url=this.Go;if(this.Go){$.post(\"/doc\",req).then(function(res){if(res.ok){$o.html(that.HTML);form.data.doc=res.rows[0];that.MixUp(form.data.doc,res.sum,res.count)\npi.resolve();}\nelse{cw.lib.note(\"Oops... \"+res.message,\"error\")\nconsole.log(\"Error\",res);window.location.hash=\"#\";pi.reject();}}).fail(function(res){cw.lib.note(\"Oops... Error occured, may be TL;DR requested does not exist.\",\"error\")\nconsole.log(\"Error\",res);window.location.hash=\"#\";pi.reject();});}\nreturn pi.promise();}",
+	"MixUp": "function (doc,sum,count){var i,r,x={},y={},idx={},c={},tsum=0,tcount=0,cl=this.Ls(\"collapsed\")||{};for(i=0;i<sum.length;i++){r=sum[i];x[r.key[1]]=r.value;}\nfor(i=0;i<count.length;i++){r=count[i];if(x[r.key[1]]&&r.value)y[r.key[1]]=x[r.key[1]]/r.value;c[r.key[1]]=r.value;}\nfor(i=0;i<doc.fragments.length;i++){r=doc.fragments[i];if(cl[r.id])doc.fragments[i].kitn=-1;idx[r.id]=i;}\nfor(i in y){if(idx[i]!==undefined){doc.fragments[idx[i]].kitn=y[i];tcount+=c[i];tsum+=x[i];}}\ndoc.votes=tcount;doc.kitn=tcount?tsum/tcount:3;}",
+	"RowDiv": {
+		"id": "cw.Kitntos.Tldr.RowDiv",
+		"ui": {
+			".full .div": {
+				"bind": "function (d,v,$o){var t;$o.data(\"html\",d.html);if(this.Collapsed(d.id)===false)t=d.html;else t=cw.lib.dehtml(d.html,250);if(/\\.{3}$/.test(t))t+=' <nobr class=\"pseudolink\">Full text</nobr>';return t;}"
+			},
+			".brief .div": {
+				"bind": "function (d){return $('<div>'+d.html+'</div>').text().truncate(80,\"right\",\"…\");}"
+			},
+			".brief": {
+				"bind": "function (d,v,$o){if(v!=null){d.kitn=d.prekitn||0;var cl={};cl[d.id]=false;$o.trigger(\"collapse\",cl);}}",
+				"events": "click.my"
+			},
+			".kit-votes-desc": {
+				"bind": "desc",
+				"css": {
+					"red": "function (d){return d.kitn>0&&d.kitn<1.5}",
+					"green": "function (d){return d.kitn>=4.5}"
+				}
+			},
+			".kit-votes-cont": {
+				"bind": "function (d,v,$o){$o.find(\"img\").css(\"margin-left\",(5-(5-Math.round(d.kitn))*66)+\"px\")}"
+			},
+			".btn-collapse": {
+				"bind": "function (d,v,$o){if(v!=null){var cl={};cl[d.id]=true;$o.trigger(\"collapse\",cl);d.prekitn=d.kitn;d.kitn=-1;}}",
+				"events": "click.my"
+			},
+			"#proxy": {
+				"bind": "function (d,v,$o){var $f=$o.my().root.find(\".fragment\");$f.removeClass(\"voted virgin collapsed\");if(d.kitn>0)$f.addClass(\"voted\");else if(d.kitn==-1)$f.addClass(\"collapsed\");else if(d.kitn==0)$f.addClass(\"virgin\");}",
+				"watch": ".btn-collapse,.brief"
+			}
+		},
+		"init": "function ($o,form){var that=this,d=form.data,$f;$o.addClass(\"div\");$o.html(this.HTML);$f=$o.find(\".fragment\");if(d.kitn==0&&$('<div>'+form.data.html+'</div>').text().length<80)d.kitn=-1;$o.on(\"click.my\",\".btn-vote\",function(evt){var num=+$(this).data(\"votes\"),$n=$(evt.target),$p=$n.parents(\".my-form\").eq(0),d=$p.my(\"data\");if($n.data(\"modal\"))$n.modal(true);else{$(\".my-modal-form\").trigger(\"cancel\");$f.addClass(\"hasmodal\");$n.modal({esc:true,enter:true,nose:\"top\",align:\"center; top:103%\",width:250,css:\"fs90 tac\",manifest:that.Vote,data:{kitn:+$n.data(\"votes\"),desc:d.desc},done:function(err,data){var t=data.desc;if(t.compact().length<5){cw.lib.note(\"Write something! Your vote can not be dumb.\",\"error\");return true;}}}).then(function(data){$f.removeClass(\"hasmodal\");_save({url:\"/vote\",data:{id:that.Root().data.doc._id,hid:that.Root().data.doc.hid,fid:d.id,kitn:data.kitn,desc:data.desc}}).then(function(res){d.kitn=res.kitn;d.desc=data.desc;$p.my(\"redraw\");console.log(res)});}).fail(function(){$f.removeClass(\"hasmodal\");})}});}",
+		"Vote": {
+			"init": ["<div class=\"dib vat mb7 xgray\" id=\"ptitle\"></div>",
+				"<textarea id=\"pdesc\" class=\"fs110 tac\" placeholder=\"50 chars max\"></textarea>",
+				"<div class=\"\">",
+				"<button id=\"btn-submit\" class=\"button fs105 w130 br100\">Submit</button>",
+				"</div>"],
+			"ui": {
+				"#pdesc": {
+					"bind": "function (d,v){if(v!=null){d.desc=v.compact().to(50);return v.to(50);}\nreturn d.desc;}"
+				},
+				"#ptitle": "function (d){return(['<span class=\"fi-alert red\"></span> It’s awful, because...','<span class=\"fi-dislike\"></span> Looks no good, because...','It’s normal, because...','<span class=\"fi-star o70 orange\"></span> It’s nice, because...','<span class=\"fi-heart salmon\"></span> Awesome ‘cause...'])[d.kitn-1];}",
+				"#btn-submit": "function (d,v,$o){if(v!=null)$o.trigger(\"commit\");}"
+			}
+		},
+		"HTML": "<div class=\"fragment\">\n\t\n\t<!-- Collapsed single line version -->\n\t<div class=\"brief lgray\">\n\t\t<div class=\"btn-expand tar w130 dib vat fs85 pr20 mt7\">►</div><div class=\"div gray\"></div>\n\t</div>\n\t\n\t<!-- Expanded version -->\n\t<div class=\"full\">\n\t\t<div class=\"btn-collapse\">\n\t\t\t<span class=\"pseudolink\">Collapse</span>\n\t\t</div><div class=\"div\"></div><div class=\"kit\">\n\t\t\t<div class=\"kit-vote\">\n\t\t\t\t<img src=\"http://ermouth.koding.io/i/all.png\" style=\"width:320px; margin-left:5px;\">\n\t\t\t\t<div style=\"position:absolute; top:0;left:0\"><div \n\t\t\t\t\tclass=\"btn-vote\" data-votes=\"5\" title=\"It’s awesome!\"></div><div \n\t\t\t\t\tclass=\"btn-vote\" data-votes=\"4\" title=\"Oh, it’s nice!\"></div><div \n\t\t\t\t\tclass=\"btn-vote\" data-votes=\"3\" title=\"Mmm, really?\"></div><div \n\t\t\t\t\tclass=\"btn-vote\" data-votes=\"2\" title=\"I dont’t like it!\"></div><div \n\t\t\t\t\tclass=\"btn-vote\" data-votes=\"1\" title=\"It’s awful :(\"></div></div>\n\t\t\t</div>\n\t\t\t<div class=\"kit-result\">\n\t\t\t\t<div class=\"kit-votes-cont\">\n\t\t\t\t\t<img src=\"http://ermouth.koding.io/i/all.png\" style=\"width:320px\">\n\t\t\t\t</div>\n\t\t\t\t<div class=\"kit-votes-desc\"></div>\n\t\t\t</div>\n\t\t</div>\n\t</div>\n\t<div class=\"hide\" id=\"proxy\"></div>\n</div>"
+	},
+	"RowH": {
+		"id": "cw.Kitntos.Tldr.RowH",
+		"init": "function ($o,form){$o.html(this.HTML.join(\"\"));}",
+		"ui": {
+			".hn": "function (d){var t=d.type;return['<',t,'>',d.html,'</',t,'>'].join('');}"
+		},
+		"HTML": ["<div class=\"fragment\">",
+			"<div style=\"margin-left:130px\" class=\"hn pt5 pb5 w700\"></div>",
+			"</div>"]
+	},
+	"HTML": "<div id=\"logo\" class=\"fr w300 mt50 mr15\">\n\t<span class=\"o50 fs250 ml-2 hoverlink\"><a href=\"#\" class=\"pseudolink\" style=\"border:none!important\">Kit’n’tos</a></span><br>\n\t<a href=\"#all\" class=\"fs85\">More kittenized TL;DRs</a>\n</div>\n<div style=\"margin:0 0 20px 130px; width:500px;padding:50px 0 15px 0;min-height: 145px;\">\n\t<h2 id=\"title\" class=\"mt0 mb5 fs170 bold\"></h2>\n\t<div class=\"fs90 lh120\" id=\"url\"></div>\n</div>\n<div id=\"flag\" class=\"bg-lblue oh\" \n\t\t style=\"display:none;width:220px; height:190px;top:-15px;left:670px;position:absolute;z-index:2\">\n\t<img src=\"http://ermouth.koding.io/i/flagbg.png\" style=\"top:-1px;left:-1px;position:absolute;z-index:-1\">\n\t<div class=\"flag-result\">\n\t\t\t\t<div class=\"flag-votes-cont\">\n\t\t\t\t\t<img src=\"http://ermouth.koding.io/i/all990.png\" style=\"width:515px\">\n\t\t\t\t</div>\n\t\t\t\t<div class=\"flag-votes-desc\"></div>\n\t</div>\n</div>\n<div id=\"fragments\" style=\"z-index:+5\"></div>\n<div id=\"footer\" class=\"fs80 gray mt30 mb30 pt30 btd o80\" style=\"width:700px;margin-left:130px;\">\n\t© 2014\n\t<a href=\"https://github.com/koding/global.hackathon/blob/master/Teams/Bismedia/ABOUT.md\"\n\t\t target=\"_blank\">Bismedia team</a> for Koding hackathon\n</div>\n<style>\n\t.ui-tooltip {\n\t\tpadding: 8px 12px 9px 12px;\n\t\tposition: absolute;\n\t\tz-index: 999;\n\t\tmax-width:150px;\n\t\tmin-width:150px!important;\n\t\tbox-shadow: 2px 2px 0px rgba(0,40,80,0.08);\n\t\tborder: 2px solid #C1D0DA;\n\t\tbackground-color:white;\n\t\tfont-size:105%!important;\n\t\tline-height:1.3em;\n\t\tcolor:rgba(61,67,75, 0.7);\n\t\theight:auto;\n\t\tfont-weight:bold;\n\t}\t\n\t.ui-tooltip:before {\n\t    content: \"\";\n\t    position: absolute;\n\t    left: 70px;\n\t    bottom: 8px;\n\t    width: 11px;\n\t    height: 11px;\n\t    border: 1px solid #C1D0DA;\n\t    border-top:none; border-right:none;\n\t    background-color:white;\n\t    transform: rotate(-45deg);\n\t    -webkit-transform: rotate(-45deg);\n\t    -moz-transform: rotate(-45deg);\n\t    -ms-transform: rotate(-45deg);\n\t    -o-transform: rotate(-45deg);\n\t    z-index:998;\n\t  }\n\t\t\t\n\t\t.ui-widget {\n\t\t\tfont-size:90%;\n\t\t}\n\t\n</style>",
+	"Go": "http://habrahabr.ru/info/agreement/"
+}

@@ -213,6 +213,7 @@ app.use(express.static(path.join(__dirname, 'public'), { maxAge: 31557600000 }))
 //get json-data for some tldr
 //app.post('/doc', passportConf.isAuthenticated, ktGetDoc);
 app.post('/doc', ktGetDoc);
+app.post('/all', ktGetAll);
 
 //get user data json
 app.get('/pd', passportConf.isAuthenticated, userController.getAccountPD);
@@ -367,52 +368,50 @@ module.exports = app;
 /*###################################*/
 /*### route functions for kitntos ###*/
 
-function render404 (callback) {
-    var html = '';
-    html += fe.tmpls.header()+
-    '<div>'+
-        '<img src="/i/logo.png" class="w170 fl">'+
-        '<h3>Page not found</h3>'+
-    '</div>'+
-    fe.tmpls.footer();
-
-    callback(html);
-}
-
 /**
  * GET /-hid8hid8
  * get doc hid and render page
  */
 function ktGetDocPage (req, res) {
-  var hid = req.url.slice(2);
+    try {
+        var hid = req.url.slice(2);
 
-  getTldrRows({view: "getTldrByHid", key: hid}, function(err, data){
-    if (err) {
-      res.sendStatus(404);
-    }
-    else {
-      renderTldr(data, function(err, data){
-        if (err) res.send(503);
-        else res.send(data);
-      });
-    }
-  });
+        getTldrRows({view: "getTldrByHid", key: hid}, function (err, data) {
+            if (err) {
+                res.sendStatus(404);
+            }
+            else {
+                renderTldr(data, function (err, data) {
+                    if (err) res.send(503);
+                    else res.send(data);
+                });
+            }
+        });
+    } catch(e){
+            res.json({'error': 503, 'message': 'Server error.'});
+        }
 }
 
 function renderTldr (data, callback) {
-  var data = data||{},
-      html = '',
-      tldr  = data.rows[0],
-      fragments = tldr.fragments?tldr.fragments:[];
+    try {
+        var data = data || {},
+            html = '',
+            tldr = data.rows[0],
+            fragments = tldr.fragments ? tldr.fragments : [];
 
-  html += fe.tmpls.header(tldr)+
-          '<div>'+
-            '<h3>'+tldr.name+'</h3>'+
-            fragments.reduce(function(html, key){return html+key.html},'')+
-          '</div>'+
-          fe.tmpls.footer();
+        html += fe.tmpls.header(tldr) +
+        '<div>' +
+        '<h3>' + tldr.name + '</h3>' +
+        fragments.reduce(function (html, key) {
+            return html + key.html
+        }, '') +
+        '</div>' +
+        fe.tmpls.footer();
 
-  callback(null, html);
+        callback(null, html);
+    } catch(e){
+        callback({'error': 503, 'message': 'Server error.'},null);
+    }
 }
 
 
@@ -422,90 +421,162 @@ function renderTldr (data, callback) {
  * @param: url || hid
  */
 function ktGetDoc (req, res) {
-  var url = req.body.url||"", hid = req.body.hid||"",
-      key = url?url:hid,
-      view = url?'getTldrByUrl':'getTldrByHid';
+    try {
+        var url = req.body.url || "", hid = req.body.hid || "",
+            key = url ? url : hid,
+            view = url ? 'getTldrByUrl' : 'getTldrByHid';
 
-  //console.log('url', req.body.url);
-  getTldrRows({view: view, key: key}, function(err, data){
-    if (err) {
-      if (err.error == "none" && !hid) {
-        fetchTldr(url, function(err, data){
-          if (err) {
-            res.json({
-              'error':404,
-              'message': err
+        //console.log('url', req.body.url);
+        getTldrRows({view: view, key: key}, function (err, data) {
+            if (err) {
+                if (err.error == "none" && !hid) {
+                    fetchTldr(url, function (err, data) {
+                        if (err) {
+                            res.json({
+                                'error': 404,
+                                'message': err
+                            });
+                        }
+                        else {
+                            res.json({
+                                'error': 400,
+                                'message': 'Doc not found',
+                                rows: [{
+                                    name: data[1],
+                                    url: url,
+                                    hid: fe.lib.hash8(clearUrl(url)),
+                                    fragments: data[0]
+                                }]
+                            });
+                        }
+                    })
+                }
+                else if (hid) res.json({'error': 404, 'message': 'Document not found.'});
+                else res.json({
+                        'error': err.statusCode || 503,
+                        'message': err.reason || err.error || 'Server error.'
+                    });
+            }
+            else {
+                res.json({'ok': 200, rows: data.rows, count: data.count, sum: data.sum});
+            }
+        });
+    } catch(e){
+        res.json({'error': 503, 'message': 'Server error.'});
+    }
+}
+
+function ktGetAll (req, res) {
+    try {
+        ktdb.view("all", 'docsByStamp', {
+            startkey: -Date.now(),
+            endkey: 0,
+            limit: 100
+        }, function (err, data) {
+            if (err) res.json({
+                'error': err.statusCode || 503,
+                'message': err.reason || err.error || 'Server error.'
             });
-          }
-          else {
-            res.json({
-              'error':400,
-              'message': 'Doc not found',
-                rows: [{
-                    name: data[1],
-                    url: url,
-                    hid: fe.lib.hash8(clearUrl(url)),
-                    fragments: data[0]
-                }]
-            });
-          }
+            else {
+                var docs = data.rows,
+                    docsHids = [],
+                    docsRows = [],
+                    all = {};
+                for (var i = 0; i < docs.length; i++) {
+                    docsHids.push(docs[i].value.hid);
+                    docsRows.push(docs[i].value);
+                }
+
+                //get  counts
+                ktdb.view("all", 'allCounts', {
+                    group: true,
+                    keys: docsHids
+                }, function (err, data) {
+                    if (err) res.json({
+                        'error': err.statusCode || 503,
+                        'message': err.reason || err.error || 'Server error.'
+                    });
+                    else {
+                        ktCounts = data.rows ? data.rows : [];
+
+                        //get sum
+                        ktdb.view("all", 'allSum', {
+                            group: true,
+                            keys: docsHids
+                        }, function (err, data) {
+                            if (err) res.json({
+                                'error': err.statusCode || 503,
+                                'message': err.reason || err.error || 'Server error.'
+                            });
+                            else {
+                                ktSum = data.rows ? data.rows : [];
+                                res.json({'ok': 200, rows: docsRows, count: ktCounts, sum: ktSum});
+                            }
+                        })
+                    }
+                });
+            }
         })
-      }
-      else if (hid) res.json({'error':404, 'message': 'Document not found.'});
-      else res.json({'error':err.statusCode||503, 'message': err.reason||err.error||'Undefined error.'});
+    } catch(e){
+        res.json({'error': 503, 'message': 'Server error.'});
     }
-    else {
-      res.json({'ok':200, rows: data.rows, count: data.count, sum: data.sum});
-    }
-  });
 }
 
 function getTldrRows (data, callback) {
-  ktdb.view("all",data.view, {key:data.key, limit:1}, function (err, data) {
-    if (err) callback(err, null);
-    else if (data.rows && !data.rows.length) callback({error:'none'}, null);
-    else {
-      var tldr,
-          ktCounts,
-          ktSum;
-      tldr = data.rows[0].value;
-
-      //get tldr fragments counts
-      ktdb.view("all",'kitnsCounts', {
-          group:true,
-          startkey:[tldr.hid,""],
-          endkey:[tldr.hid,"z"]}, function(err, data) {
-        if (err) callback(err,null);
-        else {
-          ktCounts = data.rows?data.rows:[];
-          ktdb.view("all",'kitnsSum', {
-            group:true,
-            startkey:[tldr.hid,""],
-            endkey:[tldr.hid,"z"]}, function(err, data) {
-            if (err) callback(err,null);
+    try {
+        ktdb.view("all", data.view, {key: data.key, limit: 1}, function (err, data) {
+            if (err) callback(err, null);
+            else if (data.rows && !data.rows.length) callback({error: 'none'}, null);
             else {
-              ktSum = data.rows?data.rows:[];
-              callback(null,{rows:[tldr],count:ktCounts,sum:ktSum});
+                var tldr,
+                    ktCounts,
+                    ktSum;
+                tldr = data.rows[0].value;
+
+                //get tldr fragments counts
+                ktdb.view("all", 'kitnsCounts', {
+                    group: true,
+                    startkey: [tldr.hid, ""],
+                    endkey: [tldr.hid, "z"]
+                }, function (err, data) {
+                    if (err) callback(err, null);
+                    else {
+                        ktCounts = data.rows ? data.rows : [];
+                        ktdb.view("all", 'kitnsSum', {
+                            group: true,
+                            startkey: [tldr.hid, ""],
+                            endkey: [tldr.hid, "z"]
+                        }, function (err, data) {
+                            if (err) callback(err, null);
+                            else {
+                                ktSum = data.rows ? data.rows : [];
+                                callback(null, {rows: [tldr], count: ktCounts, sum: ktSum});
+                            }
+                        })
+                    }
+                });
             }
-          })
-        }
-      });
+        });
+    } catch(e){
+        callback({'error': 503, 'message': 'Server error.'}, null);
     }
-  });
 }
 
 function fetchTldr (url, callback){
-  //todo tldr parser
-  tldrParser(url, function(err, data){
-    if (err) {
-      console.log('err',err);
-      callback('Can’t load requested URL',null);
+    try {
+        tldrParser(url, function (err, data) {
+            if (err) {
+                console.log('err', err);
+                callback('Can’t load requested URL', null);
+            }
+            else {
+                console.log('data', data[0]);
+                callback(null, data);
+            }
+        });
+    } catch(e){
+        callback({'error': 503, 'message': 'Server error.'}, null);
     }
-    else {
-      console.log('data', data[0]);
-      callback(null,data);
-    }
-  });
 }
 
 /**
@@ -557,7 +628,7 @@ function ktNewTldr (req, res) {
                              * data[0] -- array of fragments
                              * data[1] -- tldr name
                              */
-                            if (err) res.json({'error': err.statusCode||503, 'message': err.reason||err.error||'Undefined error.'});
+                            if (err) res.json({'error': err.statusCode||503, 'message': err.reason||err.error||'Server error.'});
                             else {
                                 res.json({'ok':200, rows: [newdoc], count: [], sum: []});
 
@@ -566,7 +637,7 @@ function ktNewTldr (req, res) {
                     }
                 })
             }
-            else res.json({'error':err.statusCode||503, 'message': err.reason||err.error||'Undefined error.'});
+            else res.json({'error':err.statusCode||503, 'message': err.reason||err.error||'Server error.'});
         }
         else {
             res.json({'error':503, 'message': 'Document already exist.'});
@@ -580,46 +651,102 @@ function ktNewTldr (req, res) {
  *
  */
 function ktSetVote (req, res) {
+    try {
   var doc = req.body||{},
       newdoc = {
         type:"kitten",
         creator:req.user.email||req.user._id,
         created:Date.now(),
         stamp:Date.now(),
-        parent:doc.id,			// parent doc _id
-        hid:doc.hid, 	    // parent docgroup hid
-        fragment: doc.fid,	// fragment id
-        kitn: doc.kitn*1,		// vote, 1…5
-        desc: doc.desc		// description, if it was one
+        parent:doc.id,			             // parent doc _id
+        hid:doc.hid, 	                     // parent docgroup hid
+        fragment: doc.fid,	                 // fragment id
+        kitn: doc.kitn*1,		             // vote, 1…5
+        desc: (doc.desc||"").truncate(60)	  // description, if it was one
       };
-    ktdb.view("all","fragments", {key:[doc.id,doc.fid]}, function (err, data) {
-        if (err) {
-            res.json({'error': err.statusCode||503, 'message': err.reason||err.error||'Undefined error.'});
-        }
-        else {
-            console.log('fragments rows: ', data.rows.length);
-            if (data.rows && data.rows.length) {
+        ktdb.view("all", "fragments", {key: [doc.id, doc.fid]}, function (err, data) {
+            if (err) {
+                res.json({'error': err.statusCode || 503, 'message': err.reason || err.error || 'Server error.'});
+            }
+            else {
+                console.log('fragments rows: ', data.rows.length);
+                if (data.rows && data.rows.length) {
 
-                var fragmentDoc = data.rows[0].value;
-                //check if vote exist or not
-                ktdb.view("all","votesByCreator", {key:[req.user.email||req.user._id,doc.fid]}, function (err, data) {
-                    if (err) {
-                        res.json({'error': err.statusCode||503, 'message': err.reason || err.error || 'Undefined error.'});
-                    }
-                    else {
-                        if (data.rows && data.rows.length) {
-                            var vote = data.rows[0].value;
+                    var fragmentDoc = data.rows[0].value;
+                    //check if vote exist or not
+                    ktdb.view("all", "votesByCreator", {key: [req.user.email || req.user._id, doc.fid]}, function (err, data) {
+                        if (err) {
+                            res.json({
+                                'error': err.statusCode || 503,
+                                'message': err.reason || err.error || 'Server error.'
+                            });
+                        }
+                        else {
+                            if (data.rows && data.rows.length) {
+                                var vote = data.rows[0].value;
 
-                            //update vote
-                            ktdb.atomic("all", "vote", vote._id,
-                                newdoc, function (err, data) {
-                                    console.log('update vote!');
-                                    console.log('err: ', err);
-                                    console.log('data: ', data);
-                                    if (err) res.json({'error': err.statusCode||503, 'message': err.reason||err.error||'Undefined error.'});
-                                    else if (data && data.error) res.json({'error': data.statusCode||503, 'message': data.reason||data.error||'Undefined error.'});
+                                //update vote
+                                ktdb.atomic("all", "vote", vote._id,
+                                    newdoc, function (err, data) {
+                                        console.log('update vote!');
+                                        console.log('err: ', err);
+                                        console.log('data: ', data);
+                                        if (err) res.json({
+                                            'error': err.statusCode || 503,
+                                            'message': err.reason || err.error || 'Server error.'
+                                        });
+                                        else if (data && data.error) res.json({
+                                            'error': data.statusCode || 503,
+                                            'message': data.reason || data.error || 'Server error.'
+                                        });
+                                        else {
+                                            //update fragment
+                                            var partTldr = {
+                                                _id: newdoc.parent,
+                                                stamp: newdoc.stamp,
+                                                fragment: {
+                                                    id: newdoc.fragment,
+                                                    stamp: newdoc.stamp,
+                                                    desc: newdoc.desc
+                                                }
+                                            }
+                                            console.log('partTldr: ', partTldr);
+                                            updateFragment(partTldr, function (err, data) {
+                                                if (err) res.json({
+                                                    'error': err.statusCode || 503,
+                                                    'message': err.reason || err.error || 'Server error.'
+                                                });
+                                                else {
+                                                    newFragments = data.fragments || [];
+                                                    calcFragmentVotes({hid: newdoc.hid, fragment: newdoc.fragment},
+                                                        function (err, data) {
+                                                            if (err) res.json({
+                                                                'error': err.statusCode || 503,
+                                                                'message': err.reason || err.error || 'Server error.'
+                                                            });
+                                                            else {
+                                                                res.json({
+                                                                    ok: 200,
+                                                                    kitn: data.kitn,
+                                                                    fragments: newFragments
+                                                                })
+                                                            }
+                                                        })
+                                                }
+                                            })
+                                        }
+                                    });
+                            }
+                            else {
+
+                                //create new vote
+                                ktdb.insert(newdoc, function (err, data) {
+                                    if (err) res.json({
+                                        'error': err.statusCode || 503,
+                                        'message': err.reason || err.error || 'Server error.'
+                                    });
                                     else {
-                                        //update fragment
+                                        //todo: check new fragments
                                         var partTldr = {
                                             _id: newdoc.parent,
                                             stamp: newdoc.stamp,
@@ -630,51 +757,25 @@ function ktSetVote (req, res) {
                                             }
                                         }
                                         console.log('partTldr: ', partTldr);
-                                        updateFragment(partTldr, function(err, data){
-                                            if (err) res.json({'error': err.statusCode||503, 'message': err.reason||err.error||'Undefined error.'});
+                                        updateFragment(partTldr, function (err, data) {
+                                            if (err) res.json({
+                                                'error': err.statusCode || 503,
+                                                'message': err.reason || err.error || 'Server error.'
+                                            });
                                             else {
-                                                newFragments = data.fragments||[];
+                                                newFragments = data.fragments || [];
                                                 calcFragmentVotes({hid: newdoc.hid, fragment: newdoc.fragment},
-                                                    function(err, data){
-                                                        if (err) res.json({'error': err.statusCode||503, 'message': err.reason||err.error||'Undefined error.'});
+                                                    function (err, data) {
+                                                        if (err) res.json({
+                                                            'error': err.statusCode || 503,
+                                                            'message': err.reason || err.error || 'Server error.'
+                                                        });
                                                         else {
-                                                            res.json({ok:200, kitn:data.kitn,fragments: newFragments})
-                                                        }
-                                                    })
-                                            }
-                                        })
-                                    }
-                                });
-                        }
-                        else {
-
-                            //create new vote
-                            ktdb.insert(newdoc, function(err, data) {
-                                if (err) res.json({'error': err.statusCode||503, 'message': err.reason||err.error||'Undefined error.'});
-                                else {
-                                    //todo: check new fragments
-                                    var partTldr = {
-                                        _id: newdoc.parent,
-                                        stamp: newdoc.stamp,
-                                        fragment: {
-                                            id: newdoc.fragment,
-                                            stamp: newdoc.stamp,
-                                            desc: newdoc.desc
-                                        }
-                                    }
-                                    console.log('partTldr: ', partTldr);
-                                    updateFragment(partTldr,function(err, data) {
-                                        if (err) res.json({'error': err.statusCode||503, 'message': err.reason||err.error||'Undefined error.'});
-                                        else {
-                                            newFragments = data.fragments||[];
-                                            calcFragmentVotes({hid: newdoc.hid, fragment: newdoc.fragment},
-                                                function (err, data) {
-                                                    if (err) res.json({
-                                                        'error': err.statusCode||503,
-                                                        'message': err.reason || err.error || 'Undefined error.'
-                                                    });
-                                                    else {
-                                                        res.json({ok: 200, kitn: data.kitn, fragments: newFragments})
+                                                            res.json({
+                                                                ok: 200,
+                                                                kitn: data.kitn,
+                                                                fragments: newFragments
+                                                            })
                                                     }
                                                 });
                                         }
@@ -690,9 +791,13 @@ function ktSetVote (req, res) {
             }
         }
     });
+    } catch(e){
+        res.json({'error': 503, 'message': 'Server error.'});
+}
 }
 
 function updateFragment (data, callback){
+    try {
     ktdb.atomic("all", "fragment", data._id,
         data, function (err, data) {
             if (err) callback(err, null);
@@ -701,12 +806,16 @@ function updateFragment (data, callback){
                 callback(null, data);
             }
         })
+    } catch(e){
+        callback({'error': 503, 'message': 'Server error.'}, null);
+}
 }
 
 /**
  * calc votes for fragment
  */
 function calcFragmentVotes(d0, callback) {
+    try {
     var d = d0||{};
 
     ktdb.view("all",'kitnsCounts', {
@@ -736,6 +845,9 @@ function calcFragmentVotes(d0, callback) {
             }
             else callback({'statusCode':503,'message':'Not found vote counts'},null);
     });
+    } catch(e){
+        callback({'error': 503, 'message': 'Server error.'}, null);
+}
 }
 
 
@@ -744,6 +856,7 @@ function calcFragmentVotes(d0, callback) {
  */
 
 function tldrParser (url, callback){
+    try {
     getPage(url, function(err, body) {
         if (err) return callback('Downlaod html error', null);
         else {
@@ -754,7 +867,6 @@ function tldrParser (url, callback){
                         html = $('body').size() ?
                         '<body>' + $('body').html() + '</body>' :
                         '<html>' + $('html').html() + '</html>';
-
 
 
                     // Parser-prettifier
@@ -788,12 +900,16 @@ function tldrParser (url, callback){
                                         treel = $tree.text().length;
                                     if (treel > 5000) {
                                         $c = $tree;
-						if (!$res || treel > resl*4) { $res = $tree; resl = treel; }
+                                            if (!$res || treel > resl * 4) {
+                                                $res = $tree;
+                                                resl = treel;
                                         }
+                                    }
                                     }
                             });
                         });
                     }
+
                     _getBody(depth);
                     if (!$res) {
                         depth = 6;
@@ -1024,6 +1140,9 @@ function tldrParser (url, callback){
             }
         }
     });
+    } catch(e){
+        callback({'error': 503, 'message': 'Server error.'},null);
+    }
 };
 
 /**
@@ -1032,6 +1151,7 @@ function tldrParser (url, callback){
  * @param callback
  */
 function getPage (url, callback) {
+    try {
     fetch.fetchUrl(url, {
         timeout:3000,
         headers: {
@@ -1042,13 +1162,7 @@ function getPage (url, callback) {
         else console.log("Fetched " +url+ " OK!");
         callback(error,body.toString());
     });
+    } catch(e){
+        callback({'error': 503, 'message': 'Server error.'},null);
+    }
 }
-
-
-//test db
-ktdb.view("all","getTldrByUrl", {key:'asdd'}, function (err, rows) {
-  if (err) console.log(err);
-  else {
-    console.log('rows', rows);
-  }
-});

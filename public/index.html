@@ -13,29 +13,26 @@
     <script src="/js/flatiron-director.js"></script>
 
     <script>
+        var _busy = function (i) {
+            if (!i) $("section").removeClass("kt-busy");
+            else $("section:visible").addClass("kt-busy")
+        };
+        var _save = function(){};
+
         $(function(){
             $.my.modal.parent($("#cw-body"));
-            function _busy(i) {
-                if (!i) $("section").removeClass("kt-busy");
-                else $("section:visible").addClass("kt-busy")
-            }
+
             $("#cw-body").my({
-                require: [
-                    {
-                        "this.Tldr": {
-                            url: "http://cdn.cloudwall.me/kitn/Kitntos.Tldr.json",
-                            dataType: "json", cache: false
-                        }
-                        /*"this.New":{
-                            url:"http://cdn.cloudwall.me/kitn/Kitntos.New.json",
-                            dataType:"json"
-                        },
-                        "this.Vendors":{
-                            url:"http://cdn.cloudwall.me/kitn/Kitntos.Vendors.json",
-                            dataType:"json"
-                        }*/
+                require: [ {
+                    "this.Tldr": {
+                        url: "Kitntos.Tldr.json",
+                        dataType: "json", cache: false
+                    },
+                    "this.All":{
+                        url:"Kitntos.All.json",
+                        dataType:"json", cache: false
                     }
-                ],
+                }],
                 data:{
                     url:"",
                     hid:"",
@@ -55,13 +52,12 @@
                         if (!Object.isObject(cl)) cl={};
                         $.extend(cl, data);
                         that.Ls("collapsed", cl);
-                        form.data.doc.fragments =  Object.clone(form.data.doc.fragments, true);
-                        $("#kt-Tldr").my("redraw");
                     })
 
                     //- - - - - - - - - - - - - - -
 
-                    $o.on("Save.my", function(evt, data){
+                    _save = function( data){
+                        var pi = $.Deferred();
                         if (that.PD.email) {
                             _busy(true);
                             $.post(data.url, data.data)
@@ -73,16 +69,19 @@
                                     if (data.next && window.location.hash!=data.next) {
                                         window.location.hash = data.next;
                                     }
+                                    pi.resolve(res);
                                 }
                                 else {
                                     console.log(res);
-                                    cw.lib.note("Error, use console for details.","error")
+                                    cw.lib.note("Error, use console for details.","error");
+                                    pi.reject(res);
                                 }
                             })
                             .fail(function(res){
-                               console.log(res);
-                               cw.lib.note("Error, use console for details.","error");
-                               _busy(false);
+                                console.log(res);
+                                cw.lib.note("Error, use console for details.","error");
+                                pi.reject(res);
+                                _busy(false);
                             });
                         } else {
                             //memoize
@@ -112,13 +111,17 @@
                                 css:"fs100 lh160 pl50 ml10 blue"
                             });
                         }
+                        return pi.promise();
+                    }
 
-
-                    });
+                    $o.on("Save.my", function(evt, data){ _save(data); });
 
                     //- - - - - - - - - - - - - - -
 
                     function _checkUnsaved(){
+
+                        // Trick to make auth roundtrip work
+
                         var un = that.Ls("unsaved");
                         if (Object.isObject(un)) {
 
@@ -134,6 +137,9 @@
                     //- - - - - - - - - - - - - - -
 
                     $.get("/pd",function(d){
+
+                        // Load profile
+
                         if (!d.error) {
                             that.PD = d;
                             _checkUnsaved();
@@ -146,12 +152,23 @@
                     //- - - - - - - - - - - - - - -
 
                     this.Switch =  this.Switch();
+
+                    //- - - - - - - - - - - - - - -
+
                     $o.then(function () {
-                        Router({ '/-:hid': function(hid) {
+
+                        // Init Flatiron router
+
+                        Router({
+                            '/-:hid': function(hid) {
                                 form.data.hid = hid;
                                 that.Switch("Tldr");
                             },
-                            '/': that.Switch.fill('Landing')
+                            '/': that.Switch.fill('Landing'),
+                            '/all': function(){
+                                that.Switch("All");
+                                //cw.lib.note("Sorry, not yet implemented", "error");
+                            }
                         }).init('/');
                     });
                 },
@@ -167,7 +184,6 @@
                                     _busy(true);
                                     $.post( "/doc", {url: d.url})
                                     .then(function(res){
-                                        console.log(res);
                                         _busy(false);
                                         if (res.error == 400 && res.rows && res.rows[0].fragments.length>3) {
                                             var r = res.rows[0];
@@ -183,12 +199,16 @@
                                                 next:"#-"+ r.hid
                                             });
                                         }
-                                        if (res.ok) {
+                                        if (res.error == 404) {
+                                            cw.lib.note("Error fetching page.","error");
+                                        }
+                                        else if (res.ok) {
                                             window.location.hash = "#-"+res.rows[0].hid;
                                         }
 
                                      })
                                     .fail(function(res){
+                                        cw.lib.note("Error fetching page.","error")
                                         console.log(res)
                                     });
                                 }
@@ -196,6 +216,11 @@
                             watch:"#docurl",
                             css:{
                                 ":disabled":function(d){return d.url.length<8}
+                            }
+                        },
+                        "#btn-vendors":{
+                            bind: function(d,v) {
+                                if(v!=null) cw.lib.note("Sorry, not yet implemented :(", "error");
                             }
                         }
                     }
@@ -267,13 +292,13 @@
         </div>
 
         <div class="my-row mt70">
-            <input type="text" id="docurl" placeholder="Paste URL of TL;DR here" class="fs150" style="width: 497px;"/>
+            <input type="text" id="docurl" placeholder="Paste TL;DR link here" class="fs150" style="width: 497px;"/>
             <input type="button" id="btn-go" class="fs150 w120 bw2" value="Go!">
         </div>
 
         <div class="mt30 o80 fs130">
             Or <span class="pseudolink" id="btn-vendors">select a vendor ▾</span>,
-            or scroll over <a href="/all.html">all kittenized stuff</a>.
+            or scroll over <a href="#all">all kittenized stuff</a>.
         </div>
 
         <!-- Footer -->
@@ -289,13 +314,10 @@
 
     </section>
 
-    <section id="kt-Vendors" style="display: none">
+    <section id="kt-All" style="display: none">
 
     </section>
 
-    <section id="kt-New" style="display: none">
-
-    </section>
 
 </div>
 
